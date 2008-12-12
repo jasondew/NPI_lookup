@@ -1,0 +1,2 @@
+module ProviderSearchesHelper
+end
