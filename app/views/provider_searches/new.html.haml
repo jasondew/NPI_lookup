@@ -1,0 +1,29 @@
+%h1 Search Providers
+
+- form_for @provider_search do |f|
+
+  %fieldset
+    %legend Parameters
+
+    %p
+      = f.label :npi, "NPI: "
+      = f.text_field :npi
+
+    %p
+      = f.label :organization_name, "Organization Name: "
+      = f.text_field :organization_name
+
+    %p
+      = f.label :last_name, "Last Name: "
+      = f.text_field :last_name
+
+    %p
+      = f.label :taxonomy, "Primary Taxonomy: "
+      = f.text_field :taxonomy
+
+    %p
+      = f.label :postal_code, "Postal Code: "
+      = f.text_field :postal_code
+
+    %p
+      = f.submit "Search"
