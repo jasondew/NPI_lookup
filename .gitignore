@@ -2,6 +2,7 @@ db/*.sqlite3
 config/database.yml
 config/ferret_server.yml
 config/gmaps_api_key.yml
+db/sphinx/*
 index/development
 coverage/*
 log/*
