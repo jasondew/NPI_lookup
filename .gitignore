@@ -17,3 +17,4 @@ db/schema.rb
 public/photos
 *.zip
 SR*
+db/data/*.csv
