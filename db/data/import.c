@@ -38,6 +38,7 @@ bool is_blank(char*);
 void error(char*);
 
 int main(int argc, char *argv[]) {
+  // FIXME: read from STDIN instead
   if (!argv[1]) {
     printf("Usage: %s input.csv\n", argv[0]);
     exit(0);
@@ -58,6 +59,7 @@ int main(int argc, char *argv[]) {
 
   initiate_database_connection(argv[0]);
 
+  // define SQL statements for inserting data
   provider_stmt = prepared_statement("INSERT INTO providers (npi, entity_type_code, replacement_npi, ein, organization_name, "
                                      "last_name, first_name, middle_name, name_prefix, name_suffix, credentials, "
                                      "other_organization_name, other_organization_name_type, other_last_name, other_first_name, "
@@ -66,6 +68,7 @@ int main(int argc, char *argv[]) {
                                      "reactivation_date, gender, sole_proprietor, organization_subpart, parent_organization_lbn, "
                                      "parent_organization_tin)"
                                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
   address_stmt = prepared_statement("INSERT INTO addresses (addressable_id, addressable_type, address_type, street_1,"
                                     "street_2, city, state, postal_code, country_code, phone_number, fax_number) "
                                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -79,6 +82,7 @@ int main(int argc, char *argv[]) {
   identifier_stmt = prepared_statement("INSERT INTO provider_identifiers (provider_id, number, identifier_type, state_code, issuer) "
                                        "VALUES(?, ?, ?, ?, ?)");
 
+  // empty all of the tables before inserting new data
   execute_query(conn, "TRUNCATE TABLE providers");
   execute_query(conn, "TRUNCATE TABLE provider_licenses");
   execute_query(conn, "TRUNCATE TABLE provider_identifiers");
@@ -86,19 +90,26 @@ int main(int argc, char *argv[]) {
   execute_query(conn, "TRUNCATE TABLE addresses");
   execute_query(conn, "TRUNCATE TABLE authorized_officials");
 
+  // open up the file and handle any error
   input_file = fopen(argv[1], "r");
-  original_buffer = buffer;
 
   if (!input_file) {
     printf("Error opening %s\n", argv[1]);
     exit(1);
   }
 
+  // loop through each line of the input
   while (fgets(original_buffer, BUFFER_SIZE, input_file)) {
+    // ignore the first line (headers)
     if (++line_number > 1) {
 
+      // all fields are enclosed by quotes, so strip off the initial quote
       i = 0;
       buffer = original_buffer + 1;
+
+      // find the next occurrence of "," and copy out
+      // from the beginning of the string to there
+      // and then increment buffer
       while (position = strstr(buffer, "\",\"")) {
         records[i][0] = '\0';
         strncpy(records[i], buffer, position - buffer);
@@ -106,6 +117,8 @@ int main(int argc, char *argv[]) {
         buffer = position + 3;
       }
 
+      // add the provider and then populate all related
+      // tables with the provider_id
       provider_id = add_provider(records);
       add_address(records, provider_id, 1, 17);
       add_address(records, provider_id, 2, 25);
@@ -116,6 +129,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // close out the file, close the db connection
+  // and free all pointers
   fclose(input_file);
 
   for (i = 0; i < FIELD_COUNT; i++) {
@@ -130,6 +145,8 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
+// initiate a connection to the database
+// and handle any errors
 void initiate_database_connection(char *program_name) {
   MY_INIT(program_name);
 
@@ -141,11 +158,13 @@ void initiate_database_connection(char *program_name) {
     error("mysql_real_connect() failed");
 }
 
+// close the database connection
 void close_database_connection() {
   mysql_close(conn);
   mysql_library_end();
 }
 
+// execute a SQL query and handle any errors
 void execute_query(MYSQL* conn, char sql[]) {
   if (mysql_query(conn, sql) != 0) { 
     printf("ERROR: SQL was %s\n", sql);
@@ -153,6 +172,7 @@ void execute_query(MYSQL* conn, char sql[]) {
   } 
 }
 
+// add a provider using input data
 int add_provider(char** records) {
   int i, npi, entity_type_code, replacement_npi;
   MYSQL_BIND bindings[30];
@@ -184,6 +204,8 @@ int add_provider(char** records) {
   return mysql_insert_id(conn);
 }
 
+// add an address given input, provider_id, type, and offset
+// this is so mailing and physical addresses can be read in
 void add_address(char** records, int provider_id, int address_type, int offset) {
   int i;
   MYSQL_BIND bindings[11];
@@ -199,6 +221,7 @@ void add_address(char** records, int provider_id, int address_type, int offset) 
   execute_prepared_statement(address_stmt, bindings);
 }
 
+// add an authorized official related to a provider
 void add_authorized_official(char** records, int provider_id) {
   int i;
   MYSQL_BIND bindings[9];
@@ -217,6 +240,7 @@ void add_authorized_official(char** records, int provider_id) {
   if (!all_blank) { execute_prepared_statement(authorized_official_stmt, bindings); }
 }
 
+// add all licenses based on input records
 void add_licenses(char** records, int provider_id) {
   int i, j;
   bool all_blank;
@@ -238,6 +262,7 @@ void add_licenses(char** records, int provider_id) {
   }
 }
 
+// add all taxonomies based on input records
 void add_taxonomies(char** records, int provider_id) {
   int i;
   MYSQL_BIND bindings[3];
@@ -254,6 +279,7 @@ void add_taxonomies(char** records, int provider_id) {
   }
 }
 
+// add all identifiers based on input records
 void add_identifiers(char** records, int provider_id) {
   int i, j;
   bool all_blank;
@@ -275,6 +301,7 @@ void add_identifiers(char** records, int provider_id) {
   }
 }
 
+// create a new prepared statement based on SQL
 MYSQL_STMT* prepared_statement(char* sql) {
   MYSQL_STMT *ps = mysql_stmt_init(conn);
   mysql_stmt_prepare(ps, sql, strlen(sql));
@@ -282,22 +309,26 @@ MYSQL_STMT* prepared_statement(char* sql) {
   return ps;
 }
 
+// execute a prepared statement given some bindings
 void execute_prepared_statement(MYSQL_STMT *ps, MYSQL_BIND *bindings) {
   mysql_stmt_bind_param(ps, bindings);
   mysql_stmt_execute(ps);
 }
 
+// bind an integer
 void bind_number(MYSQL_BIND* binding, int* number) {
   binding->buffer = number;
   binding->buffer_type = MYSQL_TYPE_LONG;
 }
 
+// bind a string
 void bind_string(MYSQL_BIND* binding, char* string) {
   binding->buffer = string;
   binding->buffer_type = MYSQL_TYPE_STRING;
   binding->buffer_length = strlen(string);
 }
 
+// bind a date
 void bind_date(MYSQL_BIND* binding, MYSQL_TIME* date, char* string) {
   date->year  = atoi(string + 6); string[5] = '\0';
   date->month = atoi(string + 3); string[2] = '\0';
@@ -309,10 +340,12 @@ void bind_date(MYSQL_BIND* binding, MYSQL_TIME* date, char* string) {
   }
 }
 
+// is a string blank?
 bool is_blank(char *string) {
   return strlen(string) == 0;
 }
 
+// display an error message and exit
 void error(char message[]) {
   printf("%s\n", message);
   exit(1);
