@@ -11,7 +11,6 @@ doc/app
 doc/api
 *.swp
 .DS_Store
-db/schema.rb
 *patch
 .svn
 public/photos
